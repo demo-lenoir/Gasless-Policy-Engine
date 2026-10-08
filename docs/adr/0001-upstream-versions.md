@@ -1,6 +1,6 @@
 # ADR 0001: ERC-4337 integration baseline
 
-Status: Accepted integration baseline; contract and bundler dependencies pinned in Phase 4.
+Status: Accepted integration baseline; contract and bundler dependencies pinned.
 
 ## Decision
 

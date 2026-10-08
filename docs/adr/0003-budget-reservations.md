@@ -1,6 +1,6 @@
 # ADR 0003: transactional sponsorship reservations
 
-Status: Accepted; admission and accounting implemented in Phase 2, signed-artifact settlement added in Phase 5.
+Status: Accepted; admission, accounting, and signed-artifact settlement implemented.
 
 ## Reservation unit and limits
 
@@ -22,11 +22,11 @@ The signer call and network response are not inside a database transaction. Ther
 
 | Transition | Evidence and effect |
 | --- | --- |
-| `RESERVED -> CONSUMED` | Phase 2 tests the durable transition with an explicit actual cost no greater than the hold. Phase 5 requires confirmed canonical EntryPoint evidence for the signed operation. Move held cap to actual consumed spend; the sender admission count remains charged. |
-| `RESERVED -> EXPIRED` | In Phase 2, the unsigned window ended. After issuance exists, a finalized chain scan must additionally cover the whole validity window with no inclusion. Release held Wei but retain the sender admission count. |
+| `RESERVED -> CONSUMED` | Confirmed canonical EntryPoint evidence for the signed operation moves the hold to actual consumed spend; the sender admission count remains charged. |
+| `RESERVED -> EXPIRED` | For an issued authorization, a finalized chain scan must cover the whole validity window with no inclusion. Release held Wei but retain the sender admission count. |
 | `RESERVED -> RELEASED` | No signature was durably issued and processing was cancelled or definitively failed. Release held Wei but retain the sender admission count. |
 
-If inclusion is unknown after a later issuance phase, keep `RESERVED` even after wall-clock expiry. Indexer outage, RPC inconsistency, or reorg extends the hold. Recovery may release a pre-issuance failure but cannot infer non-inclusion solely from a timeout. A future transaction committed with signed artifact but response lost must serve the stored bytes on retry. A crash after signing but before artifact commit must retry the same reservation and payload, never create a new hold. In Phase 2, identical requests serialize on the unique idempotency key and return the same stored admission result; no HTTP response code is exposed yet.
+If inclusion is unknown, keep `RESERVED` even after wall-clock expiry. Indexer outage, RPC inconsistency, or reorg extends the hold. Recovery may release a pre-issuance failure but cannot infer non-inclusion solely from a timeout. A transaction committed with signed artifact but response lost serves the stored bytes on retry. A crash after signing but before artifact commit retries the same reservation and payload, never creating a new hold. Identical requests serialize on the unique idempotency key and return the same stored admission result.
 
 An operation never submitted, or never included, becomes `EXPIRED` only after finality-covered absence. An operation submitted with unknown outcome remains held. Policy edits after reservation do not change its signed snapshot; emergency disable/pause is separate. A retry with a new idempotency key is a new financial request and may reserve again, so clients must reuse keys for network retries.
 
