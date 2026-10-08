@@ -125,10 +125,14 @@ def prepare_bundler(alto_dir):
         raise RuntimeError("pinned Alto snapshot has the wrong revision")
     if (alto_dir / "src/esm/cli/alto.js").is_file():
         return
-    if not shutil.which("node") or not shutil.which("pnpm"):
+    env = os.environ.copy()
+    node_bin = env.get("LOCAL_NODE_BIN") or shutil.which("node")
+    if node_bin and pathlib.Path(node_bin).is_file():
+        env["PATH"] = str(pathlib.Path(node_bin).resolve().parent) + os.pathsep + env.get("PATH", "")
+    if not node_bin or not shutil.which("node", path=env.get("PATH")) or not shutil.which("pnpm", path=env.get("PATH")):
         raise RuntimeError("Node.js and pnpm are required to build the pinned external bundler")
-    subprocess.run(["pnpm", "dlx", "pnpm@8.15.4", "install", "--frozen-lockfile"], cwd=alto_dir, timeout=300, check=True)
-    subprocess.run(["pnpm", "dlx", "pnpm@8.15.4", "build:all"], cwd=alto_dir, timeout=600, check=True)
+    subprocess.run(["pnpm", "dlx", "pnpm@8.15.4", "install", "--frozen-lockfile"], cwd=alto_dir, env=env, timeout=300, check=True)
+    subprocess.run(["pnpm", "dlx", "pnpm@8.15.4", "build:all"], cwd=alto_dir, env=env, timeout=600, check=True)
 
 
 def response_loss_proxy(upstream):

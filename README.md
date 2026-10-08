@@ -8,14 +8,15 @@ A sponsor cannot safely approve every request: an altered call, repeated authori
 
 ```mermaid
 flowchart LR
-  U[User account operation] --> API[Go sponsorship API]
+  U[Client UserOperation draft] --> API[Go sponsorship API]
   API --> P[Calldata and policy checks]
   P --> DB[(PostgreSQL budget reservation)]
-  DB --> S[EIP-712 sponsor signature]
-  S --> B[Alto bundler]
+  DB --> S[EIP-712 sponsor authorization]
+  S --> C[Client signs and submits UserOperation]
+  C --> B[Alto bundler]
   B --> E[EntryPoint v0.9]
   E --> PM[PolicyPaymaster]
-  E --> W[Outcome watcher]
+  E --> W[EntryPoint event watcher]
   W --> DB
 ```
 
@@ -41,8 +42,8 @@ See [policy](docs/policy.md), [accounting](docs/accounting.md), [signing](docs/s
 Install Go 1.27.1, PostgreSQL 18 server tools, Python 3, Ruby, ripgrep, Foundry/Anvil, Node.js, pnpm, Docker, and `make`. The first setup downloads the exact pinned public dependencies.
 
 ```sh
-git clone <repository-url> GaslessPolicyEngine
-cd GaslessPolicyEngine
+git clone https://github.com/demo-lenoir/Gasless-Policy-Engine.git Gasless-Policy-Engine
+cd Gasless-Policy-Engine
 python3 scripts/prepare_dependencies.py
 go mod download
 forge build
