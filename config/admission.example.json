@@ -1,0 +1,13 @@
+{
+  "native_asset": "ETH",
+  "global_daily_budget_wei": "1000000000000000000",
+  "chains": [
+    {
+      "chain_id": "31337",
+      "native_asset": "ETH",
+      "daily_budget_wei": "500000000000000000",
+      "sender_daily_wei": "100000000000000000",
+      "sender_daily_count": 20
+    }
+  ]
+}

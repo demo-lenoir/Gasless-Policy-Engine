@@ -1,0 +1,12 @@
+.git
+.github
+build
+cache
+out
+tmp
+lib
+vendor
+*.pem
+*.key
+.env
+.env.*

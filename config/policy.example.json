@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "enabled": true,
+  "chains": [
+    {
+      "chain_id": "31337",
+      "entry_point": "0x433709009B8330FDa32311DF1C2AFA402eD8D009",
+      "targets": [
+        {
+          "address": "0x1111111111111111111111111111111111111111",
+          "selectors": ["0x12345678"]
+        }
+      ]
+    }
+  ],
+  "denied_senders": [],
+  "denied_targets": [],
+  "max_call_value_wei": "1000000000000000",
+  "max_call_gas": "500000",
+  "max_verification_gas": "500000",
+  "max_pre_verification_gas": "100000",
+  "max_paymaster_verification_gas": "200000",
+  "max_paymaster_post_op_gas": "0",
+  "max_fee_per_gas_wei": "100000000000",
+  "max_priority_fee_per_gas_wei": "2000000000",
+  "max_estimated_cost_wei": "200000000000000000",
+  "min_lifetime_seconds": 10,
+  "default_lifetime_seconds": 60,
+  "max_lifetime_seconds": 120
+}

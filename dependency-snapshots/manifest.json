@@ -1,0 +1,14 @@
+{
+  "alto": {
+    "bundle_sha256": "0ed358bd1d0fbc07530b2e42dce7615850a2831670a604bab595fc4cac503fa0",
+    "omitted_markdown_files": 9,
+    "snapshot_commit": "eff44dea4d11d63f72a5593249c75653d8ff719a",
+    "upstream_commit": "96529592b67a69be23c013359cbc9990657af64a"
+  },
+  "oz": {
+    "bundle_sha256": "ba6949ece01d7675bd092f71a1cc549017accbead0b3f30718106e75ae4b412a",
+    "omitted_markdown_files": 21,
+    "snapshot_commit": "0259d8061a4d042b2a0d92f6ee12e4c1c77386cf",
+    "upstream_commit": "cab19933c33c2ad1d4c7a84864a3601dddfd16f3"
+  }
+}

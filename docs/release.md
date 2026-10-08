@@ -1,0 +1,9 @@
+# Local release verification
+
+`make verify-phase6` is the local release gate. It checks the inherited phase gates, HTTP and recovery tests, fresh PostgreSQL migrations, Foundry, direct and Alto integration, reconciliation, the complete API demo, Go vulnerability status, Docker build/runtime smoke, container high/critical findings, and an isolated clone of the exact committed source. The release script then builds `linux/amd64` and `linux/arm64` binaries, produces an SPDX 2.3 SBOM for the amd64 binary, and writes SHA-256 checksums and unsigned local provenance under ignored `build/release/`.
+
+The provenance records the source commit, submodule and source-snapshot commits, build commands, tool versions, artifact hashes, SBOM hash, and local gate result. It is unsigned; it is not a SLSA attestation. `scripts/release_local.py` refuses an uncommitted worktree. The clean-clone check also refuses uncommitted source. Regenerate these artifacts after any source or documentation commit that changes `HEAD`.
+
+The tested dependency finding GO-2026-6278 in `gorilla/websocket v1.4.2` was resolved by updating the transitive module to v1.5.3; the subsequent `govulncheck` scan reported no reachable findings. Vulnerability results depend on the current database and should be refreshed before publication. Trivy scans the built image for high and critical findings. The local Docker image uses a multi-stage Go build and a non-root distroless runtime. The container `--selfcheck` smoke confirms that the binary starts in the runtime image; the full chain and API behavior is exercised by the disposable local demo.
+
+The GitHub Actions workflow is preparation only. Hosted Linux results remain pending until the exact source commit is published and the workflow runs. No repository publication, tag, public chain deployment, or signed provenance is part of this phase.

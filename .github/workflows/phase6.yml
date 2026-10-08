@@ -1,0 +1,50 @@
+name: Phase 6 local release gate
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.10.0'
+      - name: Install pinned PostgreSQL
+        shell: bash
+        run: |
+          sudo install -d -m 0755 /usr/share/postgresql-common/pgdg
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg
+          echo 'deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg] https://apt.postgresql.org/pub/repos/apt noble-pgdg main' | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y postgresql-18=18.6-* postgresql-client-18=18.6-*
+          echo /usr/lib/postgresql/18/bin >> "$GITHUB_PATH"
+          /usr/lib/postgresql/18/bin/pg_config --version | grep -Fx 'PostgreSQL 18.6'
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.8.4
+      - name: Install pinned local integration tools
+        shell: bash
+        run: |
+          npm install -g pnpm@8.15.4
+          curl -fsSL https://raw.githubusercontent.com/anchore/syft/v1.54.0/install.sh | sudo sh -s -- -b /usr/local/bin v1.54.0
+          curl -fsSL https://github.com/aquasecurity/trivy/releases/download/v0.75.0/trivy_0.75.0_Linux-64bit.tar.gz | sudo tar -xz -C /usr/local/bin trivy
+          forge --version | grep -F '1.8.4'
+          anvil --version | grep -F '1.8.4'
+          syft version
+          trivy --version
+      - name: Verify complete local gate
+        run: make verify-phase6

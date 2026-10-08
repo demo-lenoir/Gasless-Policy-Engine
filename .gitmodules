@@ -1,0 +1,9 @@
+[submodule "lib/aa"]
+	path = lib/aa
+	url = https://github.com/eth-infinitism/account-abstraction
+[submodule "lib/oz"]
+	path = lib/oz
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "lib/alto"]
+	path = lib/alto
+	url = https://github.com/pimlicolabs/alto.git

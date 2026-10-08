@@ -1,0 +1,418 @@
+openapi: 3.1.0
+info:
+  title: Gasless Policy Engine API
+  version: 0.1.0
+  description: Local v1 HTTP contract for the fixed account and one configured issuance profile.
+servers:
+  - url: http://localhost:8080
+paths:
+  /v1/sponsorships:
+    post:
+      operationId: createSponsorship
+      summary: Evaluate and, if allowed, authorize one exact UserOperation draft
+      description: >-
+        The idempotency key is scoped to the authenticated client and retained at least
+        through authorization expiry and finality reconciliation. The same key and
+        canonical request return the same stored decision or signed artifact. The same
+        key with a different canonical request returns IDEMPOTENCY_CONFLICT. A pending
+        signing handoff returns 202. The account signature is supplied by the client
+        separately; the service never signs for the account. The authorization byte
+        layout is fixed by ADR 0002 and the shared Go/Solidity vector.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: Opaque client key, 16-128 ASCII characters; reuse for network retries.
+          schema:
+            type: string
+            minLength: 16
+            maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SponsorshipRequest'
+      responses:
+        '201':
+          description: New durable sponsorship artifact.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SponsorshipResponse'
+        '200':
+          description: Idempotently recovered durable sponsorship artifact.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SponsorshipResponse'
+        '202':
+          description: Same-key request is still being signed or recovered.
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SponsorshipResponse'
+        '400':
+          description: Malformed or noncanonical request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required or invalid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Idempotency key reused with different canonical request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Static policy or economic admission denied; response carries a stable reason.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SponsorshipResponse'
+        '503':
+          description: Required database, signer, or chain observation unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Unexpected server error; no authorization is returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v1/sponsorships/{id}:
+    get:
+      operationId: readSponsorship
+      summary: Read one sponsorship's durable state
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^(0x)?[0-9a-fA-F]{64}$'
+      responses:
+        '200':
+          description: Scoped sponsorship projection.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SponsorshipState'
+        '400':
+          description: Malformed sponsorship identifier.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required or invalid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No sponsorship in this client scope.
+        '503':
+          description: State store unavailable.
+  /v1/status:
+    get:
+      operationId: readStatus
+      summary: Read bounded chain, reconciliation, deposit, and accounting status
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current local operational projection.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationalStatus'
+        '503':
+          description: Storage unavailable.
+  /health/live:
+    get:
+      operationId: liveness
+      responses:
+        '200':
+          description: HTTP process is live.
+  /health/ready:
+    get:
+      operationId: readiness
+      responses:
+        '200':
+          description: Issuance and reconciliation prerequisites are healthy.
+        '503':
+          description: Service is not ready.
+  /metrics:
+    get:
+      operationId: metrics
+      summary: Prometheus metrics without unbounded identity labels
+      responses:
+        '200':
+          description: Prometheus text exposition.
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  schemas:
+    Address:
+      type: string
+      description: 20-byte EVM address; checksum and canonical case rules are a normalizer contract.
+      pattern: '^0x[0-9a-fA-F]{40}$'
+    HexBytes:
+      type: string
+      pattern: '^0x([0-9a-fA-F]{2})*$'
+    UintString:
+      type: string
+      description: Unsigned base-10 integer with no leading zero except zero itself.
+      pattern: '^(0|[1-9][0-9]*)$'
+    SponsorshipRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - chain_id
+        - entry_point
+        - user_operation
+      properties:
+        chain_id:
+          $ref: '#/components/schemas/UintString'
+        entry_point:
+          $ref: '#/components/schemas/Address'
+        user_operation:
+          $ref: '#/components/schemas/UserOperationDraft'
+        requested_lifetime_seconds:
+          $ref: '#/components/schemas/UintString'
+    UserOperationDraft:
+      type: object
+      description: >-
+        ERC-4337 v0.9 off-chain fields for an already deployed fixed account.
+        The API rejects nonempty initCode/factory, EIP-7702 authorization,
+        batches, client paymaster data, and account executeUserOp.
+      additionalProperties: false
+      required:
+        - sender
+        - nonce
+        - call_data
+        - call_gas_limit
+        - verification_gas_limit
+        - pre_verification_gas
+        - max_fee_per_gas
+        - max_priority_fee_per_gas
+        - paymaster_verification_gas_limit
+        - paymaster_post_op_gas_limit
+      properties:
+        sender:
+          $ref: '#/components/schemas/Address'
+        nonce:
+          $ref: '#/components/schemas/UintString'
+        call_data:
+          $ref: '#/components/schemas/HexBytes'
+        call_gas_limit:
+          $ref: '#/components/schemas/UintString'
+        verification_gas_limit:
+          $ref: '#/components/schemas/UintString'
+        pre_verification_gas:
+          $ref: '#/components/schemas/UintString'
+        max_fee_per_gas:
+          $ref: '#/components/schemas/UintString'
+        max_priority_fee_per_gas:
+          $ref: '#/components/schemas/UintString'
+        paymaster_verification_gas_limit:
+          $ref: '#/components/schemas/UintString'
+        paymaster_post_op_gas_limit:
+          type: string
+          const: '0'
+          description: V1 paymaster returns empty context and does not use postOp.
+    SponsorshipResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - request_id
+        - decision
+        - reason
+        - policy_version
+      properties:
+        request_id:
+          type: string
+          format: uuid
+        decision:
+          type: string
+          enum: [approved, denied, pending]
+        reason:
+          $ref: '#/components/schemas/DecisionReason'
+        policy_version:
+          type: integer
+          format: int64
+          minimum: 1
+        sponsorship_id:
+          type: string
+          description: Present for approved or pending reservations; 32-byte hex identifier.
+          pattern: '^0x[0-9a-fA-F]{64}$'
+        valid_after:
+          type: string
+          format: date-time
+        valid_until:
+          type: string
+          format: date-time
+        authorization:
+          $ref: '#/components/schemas/PaymasterAuthorization'
+        user_op_hash:
+          type: string
+          pattern: '^0x[0-9a-fA-F]{64}$'
+        estimated_upper_bound_wei:
+          $ref: '#/components/schemas/UintString'
+    SponsorshipState:
+      type: object
+      description: Durable read projection scoped by the authenticated client.
+      properties:
+        request_id: {type: string, format: uuid}
+        sponsorship_id: {type: string}
+        decision: {type: string}
+        reason: {type: string}
+        policy_version: {type: integer}
+        reservation_state: {type: string}
+        issuance_state: {type: string}
+        outcome_state: {type: string}
+        valid_after: {type: string, format: date-time}
+        valid_until: {type: string, format: date-time}
+        user_op_hash: {type: string}
+        execution_success: {type: boolean}
+        actual_gas_cost_wei: {$ref: '#/components/schemas/UintString'}
+        outcome_block_number: {type: integer}
+        outcome_block_hash: {type: string}
+        finalized_head_number: {type: integer}
+        settled_at: {type: string, format: date-time}
+    OperationalStatus:
+      type: object
+      properties:
+        chain_id: {$ref: '#/components/schemas/UintString'}
+        entry_point: {$ref: '#/components/schemas/Address'}
+        paymaster: {$ref: '#/components/schemas/Address'}
+        checkpoint: {type: integer}
+        observed_head: {type: integer}
+        lag_blocks: {type: integer}
+        stream_state: {type: string}
+        unsafe_reason: {type: string}
+        paymaster_deposit_wei: {$ref: '#/components/schemas/UintString'}
+        deposit_state: {type: string, enum: [unknown, healthy, low, critical]}
+        signer_available: {type: boolean}
+        ready: {type: boolean}
+        accounting:
+          type: object
+          properties:
+            open_reservations: {type: integer}
+            consumed: {type: integer}
+            expired: {type: integer}
+            global_budget_remaining_wei: {$ref: '#/components/schemas/UintString'}
+            emergency_disabled: {type: boolean}
+            accounting_valid: {type: boolean}
+    PaymasterAuthorization:
+      type: object
+      description: Present only when approved and the signed artifact is durable.
+      additionalProperties: false
+      required: [paymaster, paymaster_verification_gas_limit, paymaster_post_op_gas_limit, paymaster_and_data]
+      properties:
+        paymaster:
+          $ref: '#/components/schemas/Address'
+        paymaster_verification_gas_limit:
+          $ref: '#/components/schemas/UintString'
+        paymaster_post_op_gas_limit:
+          $ref: '#/components/schemas/UintString'
+        paymaster_data:
+          allOf:
+            - $ref: '#/components/schemas/HexBytes'
+          description: Optional 116-byte typed authorization data before the signature suffix.
+        paymaster_and_data:
+          allOf:
+            - $ref: '#/components/schemas/HexBytes'
+          description: Exact 243-byte v0.9 field including paymaster, gas limits, authorization data, signature, length, and magic.
+    DecisionReason:
+      type: string
+      enum:
+        - APPROVED
+        - SIGNING_PENDING
+        - MALFORMED_REQUEST
+        - UNSUPPORTED_CALL_SHAPE
+        - CHAIN_NOT_ALLOWED
+        - ENTRYPOINT_NOT_ALLOWED
+        - ACCOUNT_NOT_ALLOWED
+        - TARGET_NOT_ALLOWED
+        - SELECTOR_NOT_ALLOWED
+        - SENDER_DENYLISTED
+        - TARGET_DENYLISTED
+        - CALL_VALUE_EXCEEDED
+        - CALL_GAS_LIMIT_EXCEEDED
+        - VERIFICATION_GAS_LIMIT_EXCEEDED
+        - PRE_VERIFICATION_GAS_LIMIT_EXCEEDED
+        - PAYMASTER_VERIFICATION_GAS_LIMIT_EXCEEDED
+        - PAYMASTER_POST_OP_GAS_LIMIT_EXCEEDED
+        - MAX_FEE_PER_GAS_EXCEEDED
+        - MAX_PRIORITY_FEE_PER_GAS_EXCEEDED
+        - ESTIMATED_COST_EXCEEDED
+        - INVALID_VALIDITY
+        - GLOBAL_BUDGET_EXHAUSTED
+        - CHAIN_BUDGET_EXHAUSTED
+        - QUOTA_EXHAUSTED
+        - IDEMPOTENCY_CONFLICT
+        - INVALID_REQUEST
+        - EMERGENCY_DISABLED
+        - AUTHORIZATION_ISSUED
+        - AUTHORIZATION_ALREADY_ISSUED
+        - SIGNING_IN_PROGRESS
+        - POLICY_VERSION_REVOKED
+        - POLICY_VERSION_CONFLICT
+        - AUTHORIZATION_EXPIRED
+        - RESERVATION_STATE_CONFLICT
+        - SIGNING_CLAIM_LOST
+        - SIGNER_UNAVAILABLE
+        - SIGNER_TIMEOUT
+        - SIGNER_IDENTITY_MISMATCH
+        - INVALID_SIGNATURE
+        - STORAGE_UNAVAILABLE
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [request_id, code, message]
+      properties:
+        request_id:
+          type: string
+          format: uuid
+        code:
+          type: string
+          enum:
+            - INVALID_REQUEST
+            - UNAUTHORIZED
+            - IDEMPOTENCY_CONFLICT
+            - UNSUPPORTED_USER_OPERATION
+            - DEPENDENCY_UNAVAILABLE
+            - NOT_READY
+            - NOT_FOUND
+            - AUTHORIZATION_STATE_CONFLICT
+            - CHAIN_STATE_UNAVAILABLE
+            - SIGNER_UNAVAILABLE
+            - SIGNER_TIMEOUT
+            - SIGNER_IDENTITY_MISMATCH
+            - INVALID_SIGNATURE
+            - POLICY_VERSION_CONFLICT
+            - INTERNAL_ERROR
+        message:
+          type: string
+          description: Human-readable, non-sensitive summary; clients branch on code.
