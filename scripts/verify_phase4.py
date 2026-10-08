@@ -167,8 +167,10 @@ with tempfile.TemporaryDirectory(prefix="gasless-phase4-") as work:
     while anvil_port == pg_port:
         anvil_port = port()
     data = directory / "pg"
+    socket_dir = pathlib.Path(work) / "socket"
+    socket_dir.mkdir()
     run("initdb", "-D", str(data), "-A", "trust", "--no-instructions")
-    run("pg_ctl", "-D", str(data), "-o", f"-h 127.0.0.1 -p {pg_port} -F", "-w", "start")
+    run("pg_ctl", "-D", str(data), "-o", f"-h 127.0.0.1 -p {pg_port} -F -c unix_socket_directories={socket_dir}", "-w", "start")
     anvil_log = (directory / "anvil.log").open("w")
     anvil = subprocess.Popen(
         ["anvil", "--silent", "--host", "127.0.0.1", "--port", str(anvil_port), "--chain-id", "31337"],

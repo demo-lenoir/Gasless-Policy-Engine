@@ -16,11 +16,13 @@ def run(*args, env=None):
 
 with tempfile.TemporaryDirectory(prefix="gasless-pg-") as work:
     data = pathlib.Path(work) / "data"
+    socket_dir = pathlib.Path(work) / "socket"
+    socket_dir.mkdir()
     run("initdb", "-D", str(data), "-A", "trust", "--no-instructions")
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
-    run("pg_ctl", "-D", str(data), "-o", f"-h 127.0.0.1 -p {port} -F", "-w", "start")
+    run("pg_ctl", "-D", str(data), "-o", f"-h 127.0.0.1 -p {port} -F -c unix_socket_directories={socket_dir}", "-w", "start")
     try:
         for database in ("gasless_one", "gasless_two"):
             run("createdb", "-h", "127.0.0.1", "-p", str(port), database)
